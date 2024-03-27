@@ -131,17 +131,17 @@ fn init_subscriber(subscriber: impl Subscriber + Send + Sync) {
     set_global_default(subscriber).expect("Failed to set subscriber");
 }
 
-pub fn init_log(app_name: &str, log_level: &str, endpoint: Option<&str>, is_local: bool) {
+pub fn init_log(app_name: &str, log_level: &str, endpoint: Option<&str>, with_json: bool) {
     if endpoint.is_some() {
+        // opentelemetry endpoint is set, use opentelemetry, and log format must json
         let subscriber = get_telemetry_subscriber(app_name.into(), log_level.into(), endpoint.unwrap());
         init_subscriber(subscriber);
     } else {
-        let mut with_json = true;
-        if is_local {
-            // local development environment does not need json format, it is more readable
-            with_json = false;
-        }
         let subscriber = get_tracing_subscriber(app_name.into(), log_level.into(), with_json);
         init_subscriber(subscriber);
     }
+}
+
+pub fn shutdown_tracer() {
+    global::shutdown_tracer_provider();
 }
