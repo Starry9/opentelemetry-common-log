@@ -76,14 +76,14 @@ fn get_opentelemetry_tracer(name: &str, opentelemetry_endpoint: &str) -> Tracer 
 /// We need to explicitly call out that the returned subscriber is
 /// `Send` and `Sync` to make it possible to pass it to `init_subscriber`
 /// later on.
-fn get_telemetry_subscriber(name: String, log_level: String, opentelemetry_endpoint: &str) -> impl Subscriber + Send + Sync {
-    // 设置 opentelemetry 全局上下文（为了注入到分布式请求中追踪分布式服务）
+fn get_telemetry_subscriber(name: String, log_level: String, opentelemetry_endpoint: String) -> impl Subscriber + Send + Sync {
+    // Set up the opentelemetry global context (in order to inject into distributed requests to trace distributed services)
     #[cfg(feature = "datadog")]
     global::set_text_map_propagator(DatadogPropagator::new());
     #[cfg(feature = "otlp")]
     global::set_text_map_propagator(TraceContextPropagator::new());
 
-    let tracer = get_opentelemetry_tracer(&name, opentelemetry_endpoint);
+    let tracer = get_opentelemetry_tracer(&name, &opentelemetry_endpoint);
     // Create a tracing layer with the configured tracer
     let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
 
@@ -101,23 +101,23 @@ fn get_telemetry_subscriber(name: String, log_level: String, opentelemetry_endpo
         .with(telemetry)
 }
 
-fn get_tracing_subscriber(name: String, log_level: String, with_json: bool) -> impl Subscriber + Send + Sync {
-    if with_json {
-        let formatting_layer = BunyanFormattingLayer::new(name, std::io::stdout);
-        let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(log_level));
-        Registry::default()
-            .with(env_filter)
-            .with(JsonStorageLayer)
-            .with(formatting_layer)
-    } else {
-        let formatting_layer = tracing_subscriber::fmt::layer()
-            .with_file(true)
-            .with_line_number(true);
-        let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(log_level));
-        Registry::default()
-            .with(env_filter)
-            .with(formatting_layer)
-    }
+fn get_tracing_subscriber_with_json(name: String, log_level: String) -> impl Subscriber + Send + Sync {
+    let formatting_layer = BunyanFormattingLayer::new(name, std::io::stdout);
+    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(log_level));
+    Registry::default()
+        .with(env_filter)
+        .with(JsonStorageLayer)
+        .with(formatting_layer)
+}
+
+fn get_tracing_subscriber_without_json(_name: String, log_level: String) -> impl Subscriber + Send + Sync {
+    let formatting_layer = tracing_subscriber::fmt::layer()
+        .with_file(true)
+        .with_line_number(true);
+    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(log_level));
+    Registry::default()
+        .with(env_filter)
+        .with(formatting_layer)
 }
 
 /// Register a subscriber as global default to process span data.
@@ -131,14 +131,19 @@ fn init_subscriber(subscriber: impl Subscriber + Send + Sync) {
     set_global_default(subscriber).expect("Failed to set subscriber");
 }
 
-pub fn init_log(app_name: &str, log_level: &str, endpoint: Option<&str>, with_json: bool) {
+pub fn init_log(app_name: String, log_level: String, endpoint: Option<String>, with_json: bool) {
     if endpoint.is_some() {
         // opentelemetry endpoint is set, use opentelemetry, and log format must json
-        let subscriber = get_telemetry_subscriber(app_name.into(), log_level.into(), endpoint.unwrap());
+        let subscriber = get_telemetry_subscriber(app_name, log_level, endpoint.unwrap());
         init_subscriber(subscriber);
     } else {
-        let subscriber = get_tracing_subscriber(app_name.into(), log_level.into(), with_json);
-        init_subscriber(subscriber);
+        if with_json {
+            let subscriber = get_tracing_subscriber_with_json(app_name, log_level);
+            init_subscriber(subscriber);
+        } else {
+            let subscriber = get_tracing_subscriber_without_json(app_name, log_level);
+            init_subscriber(subscriber);
+        }
     }
 }
 

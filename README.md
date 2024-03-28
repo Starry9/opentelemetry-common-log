@@ -1,15 +1,19 @@
 # opentelemetry-common-log
 
-This is a project built with Rust and Cargo, mainly for handling OpenTelemetry and log related functionalities.
+This is a project built with Rust and Cargo, mainly for handling OpenTelemetry and log related functionalities.  
+Support for OpenTelemetry tracing and logging is provided, otlp jaeger and datadog are supported as tracing backends.
 
 ## Installation
 
 First, you need to install Rust and Cargo. Then, you can clone and build this project with the following commands:
 
 ```bash
-git clone https://github.com/username/opentelemetry-common-log.git
-cd opentelemetry-common-log
-cargo build
+cargo add --git https://github.com/Starry9/opentelemetry-common-log --tag v0.1.0
+```
+The default tracing backend is otlp, if you want to use jaeger or datadog, you can add the corresponding feature flags:
+
+```bash
+cargo add --git https://github.com/Starry9/opentelemetry-common-log --tag v0.1.0 --features "jaeger"
 ```
 
 ## Usage
